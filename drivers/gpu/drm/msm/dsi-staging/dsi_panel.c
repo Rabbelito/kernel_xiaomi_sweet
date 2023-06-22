@@ -702,11 +702,6 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 		return -EINVAL;
 	}
 
-	if (panel->doze_enabled && panel->doze_mode == DSI_DOZE_DARK) {
-		pr_info("Setting backlight level to zero\n");
-		bl_lvl = 0;
-	}
-
 	if (panel->bl_config.bl_remap_flag && panel->bl_config.brightness_max_level &&
 			panel->bl_config.bl_max_level) {
 		/*
@@ -801,8 +796,6 @@ static u32 dsi_panel_get_backlight(struct dsi_panel *panel)
 		bl_level = panel->bl_config.bl_doze_hbm;
 	else if (panel->doze_enabled && panel->doze_mode == DSI_DOZE_LPM)
 		bl_level = panel->bl_config.bl_doze_lpm;
-	else if (panel->doze_enabled && panel->doze_mode == DSI_DOZE_DARK)
-		bl_level = 0;
 	else if (!panel->doze_enabled)
 		bl_level = panel->bl_config.bl_level;
 
@@ -850,14 +843,12 @@ int dsi_panel_update_doze(struct dsi_panel *panel) {
 		if (rc)
 			pr_err("[%s] failed to send DSI_CMD_SET_DOZE_LBM cmd, rc=%d\n",
 					panel->name, rc);
-	} else {
+	} else if (!panel->doze_enabled) {
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_NOLP);
 		if (rc)
 			pr_err("[%s] failed to send DSI_CMD_SET_NOLP cmd, rc=%d\n",
 					panel->name, rc);
 	}
-
-	dsi_panel_set_backlight(panel, panel->bl_config.bl_level);
 
 	return rc;
 }
@@ -1990,6 +1981,8 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-qsync-off-commands",
 	"qcom,mdss-dsi-doze-hbm-command",
 	"qcom,mdss-dsi-doze-lbm-command",
+	"qcom,mdss-dsi-dispparam-hbm-on-command",
+	"qcom,mdss-dsi-dispparam-hbm-off-command",
 	"qcom,mdss-dsi-dispparam-hbm-fod-on-command",
 	"qcom,mdss-dsi-dispparam-hbm-fod-off-command",
 	"qcom,mdss-dsi-read-lockdown-info-command",
@@ -2000,6 +1993,8 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-dc-demura-l2-command",
 	"qcom,mdss-dsi-dispparam-dc-on-command",
 	"qcom,mdss-dsi-dispparam-dc-off-command",
+	"qcom,mdss-dsi-dispparam-bc-120hz-command",
+	"qcom,mdss-dsi-dispparam-bc-60hz-command",
 };
 
 const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
@@ -2028,6 +2023,8 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-qsync-off-commands-state",
 	"qcom,mdss-dsi-doze-hbm-command-state",
 	"qcom,mdss-dsi-doze-lbm-command-state",
+	"qcom,mdss-dsi-dispparam-hbm-on-command-state",
+	"qcom,mdss-dsi-dispparam-hbm-off-command-state",
 	"qcom,mdss-dsi-dispparam-hbm-fod-on-command-state",
 	"qcom,mdss-dsi-dispparam-hbm-fod-off-command-state",
 	"qcom,mdss-dsi-read-lockdown-info-command-state",
@@ -2038,6 +2035,8 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-dc-demura-l2-command-state",
 	"qcom,mdss-dsi-dispparam-dc-on-command-state",
 	"qcom,mdss-dsi-dispparam-dc-off-command-state",
+	"qcom,mdss-dsi-dispparam-bc-120hz-command-state",
+	"qcom,mdss-dsi-dispparam-bc-60hz-command-state",
 };
 
 static int dsi_panel_get_cmd_pkt_count(const char *data, u32 length, u32 *cnt)
@@ -3945,6 +3944,41 @@ int dsi_panel_drv_deinit(struct dsi_panel *panel)
 	return rc;
 }
 
+#ifdef CONFIG_MACH_XIAOMI_SWEET
+void dsi_panel_gamma_mode_change(struct dsi_panel *panel,
+			struct dsi_display_mode *adj_mode)
+{
+	u32 count = 0;
+	int rc = 0;
+	struct dsi_display_mode *cur_mode = panel->cur_mode;
+
+	mutex_lock(&panel->panel_lock);
+	if (!panel->panel_initialized || !adj_mode || !cur_mode) {
+		pr_err("Invalid params\n");
+		goto exit;
+	}
+
+	count = cur_mode->priv_info->cmd_sets[DSI_CMD_SET_DISP_BC_120HZ].count;
+	if (!count)
+		goto exit;
+
+	if (adj_mode->timing.refresh_rate == 120)
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_BC_120HZ);
+	else if (adj_mode->timing.refresh_rate == 60)
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_BC_60HZ);
+
+	if (rc)
+		pr_err("%s: send cmds failed...", __func__);
+	else
+		pr_info("%s: refresh_rate[%d]\n", __func__, adj_mode->timing.refresh_rate);
+
+exit:
+	mutex_unlock(&panel->panel_lock);
+
+	return;
+}
+#endif
+
 int dsi_panel_validate_mode(struct dsi_panel *panel,
 			    struct dsi_display_mode *mode)
 {
@@ -4909,8 +4943,8 @@ error:
 int dsi_panel_apply_hbm_mode(struct dsi_panel *panel)
 {
 	static const enum dsi_cmd_set_type type_map[] = {
-		DSI_CMD_SET_DISP_HBM_FOD_OFF,
-		DSI_CMD_SET_DISP_HBM_FOD_ON
+		DSI_CMD_SET_DISP_HBM_OFF,
+		DSI_CMD_SET_DISP_HBM_ON
 	};
 
 	enum dsi_cmd_set_type type;
