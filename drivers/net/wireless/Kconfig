@@ -1,158 +1,80 @@
-#
-# Wireless LAN device configuration
-#
-
-menuconfig WLAN
-	bool "Wireless LAN"
-	depends on !S390
-	depends on NET
-	select WIRELESS
-	default y
+config CNSS2
+	tristate "CNSS2 Platform Driver for Wi-Fi Module"
+	depends on !CNSS && PCI_MSM
 	---help---
-	  This section contains all the pre 802.11 and 802.11 wireless
-	  device drivers. For a complete list of drivers and documentation
-	  on them refer to the wireless wiki:
+	  This module adds the support for Connectivity Subsystem (CNSS) used
+	  for PCIe based Wi-Fi devices with QCA6174/QCA6290 chipsets.
+	  This driver also adds support to integrate WLAN module to subsystem
+	  restart framework.
 
-	  http://wireless.kernel.org/en/users/Drivers
-
-if WLAN
-
-config WIRELESS_WDS
-	bool "mac80211-based legacy WDS support" if EXPERT
-	help
-	  This option enables the deprecated WDS support, the newer
-	  mac80211-based 4-addr AP/client support supersedes it with
-	  a much better feature set (HT, VHT, ...)
-
-	  We plan to remove this option and code, so if you find
-	  that you have to enable it, please let us know on the
-	  linux-wireless@vger.kernel.org mailing list, so we can
-	  help you migrate to 4-addr AP/client (or, if it's really
-	  necessary, give up on our plan of removing it).
-
-source "drivers/net/wireless/admtek/Kconfig"
-source "drivers/net/wireless/ath/Kconfig"
-source "drivers/net/wireless/atmel/Kconfig"
-source "drivers/net/wireless/broadcom/Kconfig"
-source "drivers/net/wireless/cisco/Kconfig"
-source "drivers/net/wireless/intel/Kconfig"
-source "drivers/net/wireless/intersil/Kconfig"
-source "drivers/net/wireless/marvell/Kconfig"
-source "drivers/net/wireless/mediatek/Kconfig"
-source "drivers/net/wireless/ralink/Kconfig"
-source "drivers/net/wireless/realtek/Kconfig"
-source "drivers/net/wireless/rsi/Kconfig"
-source "drivers/net/wireless/st/Kconfig"
-source "drivers/net/wireless/ti/Kconfig"
-source "drivers/net/wireless/zydas/Kconfig"
-source "drivers/net/wireless/quantenna/Kconfig"
-
-config PCMCIA_RAYCS
-	tristate "Aviator/Raytheon 2.4GHz wireless support"
-	depends on PCMCIA
-	select WIRELESS_EXT
-	select WEXT_SPY
-	select WEXT_PRIV
+config CNSS2_DEBUG
+	bool "CNSS2 Platform Driver Debug Support"
+	depends on CNSS2
 	---help---
-	  Say Y here if you intend to attach an Aviator/Raytheon PCMCIA
-	  (PC-card) wireless Ethernet networking card to your computer.
-	  Please read the file <file:Documentation/networking/ray_cs.txt> for
-	  details.
+	  This option is to enable CNSS2 platform driver debug support which
+	  primarily includes providing additional verbose logs for certain
+	  features, enabling kernel panic for certain cases to aid the
+	  debugging, and enabling any other debug mechanisms.
 
-	  To compile this driver as a module, choose M here: the module will be
-	  called ray_cs.  If unsure, say N.
-
-config PCMCIA_WL3501
-	tristate "Planet WL3501 PCMCIA cards"
-	depends on CFG80211 && PCMCIA
-	select WIRELESS_EXT
-	select WEXT_SPY
-	help
-	  A driver for WL3501 PCMCIA 802.11 wireless cards made by Planet.
-	  It has basic support for Linux wireless extensions and initial
-	  micro support for ethtool.
-
-config MAC80211_HWSIM
-	tristate "Simulated radio testing tool for mac80211"
-	depends on MAC80211
+config CNSS2_QMI
+	bool "CNSS2 Platform Driver QMI support"
+	depends on CNSS2
 	---help---
-	  This driver is a developer testing tool that can be used to test
-	  IEEE 802.11 networking stack (mac80211) functionality. This is not
-	  needed for normal wireless LAN usage and is only for testing. See
-	  Documentation/networking/mac80211_hwsim for more information on how
-	  to use this tool.
+	  CNSS2 platform driver uses QMI framework to communicate with WLAN
+	  firmware. It sends and receives boot handshake messages to WLAN
+	  firmware, which includes hardware and software capabilities and
+	  configurations. It also sends WLAN on/off control message to
+	  firmware over QMI channel.
 
-	  To compile this driver as a module, choose M here: the module will be
-	  called mac80211_hwsim.  If unsure, say N.
-
-config USB_NET_RNDIS_WLAN
-	tristate "Wireless RNDIS USB support"
-	depends on USB
-	depends on CFG80211
-	select USB_NET_DRIVERS
-	select USB_USBNET
-	select USB_NET_CDCETHER
-	select USB_NET_RNDIS_HOST
+config CNSS_ASYNC
+	bool "Enable/disable CNSS platform driver asynchronous probe"
+	depends on CNSS2
 	---help---
-	  This is a driver for wireless RNDIS devices.
-	  These are USB based adapters found in devices such as:
+	  If enabled, CNSS platform driver would do asynchronous probe.
+	  Using asynchronous probe will allow CNSS platform driver to
+	  probe in parallel with other device drivers and will help to
+	  reduce kernel boot time.
 
-	  Buffalo WLI-U2-KG125S
-	  U.S. Robotics USR5421
-	  Belkin F5D7051
-	  Linksys WUSB54GSv2
-	  Linksys WUSB54GSC
-	  Asus WL169gE
-	  Eminent EM4045
-	  BT Voyager 1055
-	  Linksys WUSB54GSv1
-	  U.S. Robotics USR5420
-	  BUFFALO WLI-USB-G54
+config BUS_AUTO_SUSPEND
+	bool "Enable/Disable Runtime PM support for PCIe based WLAN Drivers"
+	depends on CNSS2
+	depends on PCI
+	---help---
+	  Runtime Power Management is supported for PCIe based WLAN Drivers.
+	  The features enable cld wlan driver to suspend pcie bus when APPS
+	  is awake based on the driver inactivity with the Firmware.
+	  The Feature uses runtime power management framework from kernel to
+	  track bus access clients and to synchronize the driver activity
+	  during system pm.
+	  This config flag controls the feature per target based. The feature
+	  requires CNSS driver support.
 
-	  All of these devices are based on Broadcom 4320 chip which is the
-	  only wireless RNDIS chip known to date.
+config CNSS_QCA6290
+	bool "Enable CNSS QCA6290 chipset specific changes"
+	---help---
+	  This enables the changes from WLAN host driver that are specific to
+	  CNSS QCA6290 chipset.
+	  These changes are needed to support the new hardware architecture
+	  for CNSS QCA6290 chipset.
 
-	  If you choose to build a module, it'll be called rndis_wlan.
+config CNSS_QCA6390
+	bool "Enable CNSS QCA6390 chipset specific changes"
+	---help---
+	  This enables the changes from WLAN host driver that are specific to
+	  CNSS QCA6390 chipset.
+	  These changes are needed to support the new hardware architecture
+	  for CNSS QCA6390 chipset.
 
-config WCNSS_MEM_PRE_ALLOC
-       tristate "WCNSS pre-alloc memory support"
+config CNSS_EMULATION
+	bool "Enable specific changes for emulation hardware"
+	---help---
+	  This enables the changes from WLAN drivers that are specific to
+	  emulation hardware.
+	  These changes are needed for WLAN drivers to support and meet the
+	  requirement of emulation hardware.
+
+config CNSS_SUPPORT_DUAL_DEV
+       bool "Enable cnss support dual wlan card"
        ---help---
-         Pre-allocate memory for the WLAN driver module.
-	 This feature enable cld wlan driver to use pre allocated memory
-	 for it's internal usage and release it to back to pre allocated pool.
-	 This memory is allocated at the cold boot time.
-
-config CNSS_CRYPTO
-	tristate "Enable CNSS crypto support"
-	---help---
-	  Add crypto support for the WLAN  driver module.
-	  This feature enable wlan driver to use the crypto APIs exported
-	  from cnss platform driver. This crypto APIs used to generate cipher
-	  key and add support for the WLAN driver module security protocol.
-
-config CLD_LL_CORE
-	tristate "QTI core WLAN driver for QCA6174 chipset"
-	select NL80211_TESTMODE
-	select WEXT_CORE
-	select WEXT_PRIV
-	select WEXT_SPY
-	select WIRELESS_EXT
-	---help---
-	  This section contains the necessary modules needed to enable the
-	  core WLAN driver for QTI QCA6174 chipset.
-	  Select Y to compile the driver in order to have WLAN functionality
-	  support.
-
-source "drivers/net/wireless/cnss2/Kconfig"
-source "drivers/net/wireless/cnss/Kconfig"
-source "drivers/net/wireless/cnss_utils/Kconfig"
-source "drivers/net/wireless/cnss_genl/Kconfig"
-
-config VIRT_WIFI
-	tristate "Wifi wrapper for ethernet drivers"
-	depends on CFG80211
-	---help---
-	  This option adds support for ethernet connections to appear as if they
-	  are wifi connections through a special rtnetlink device.
-
-endif # WLAN
+         This enables the changes from cnss platform driver to support dual
+         wlan card attach
